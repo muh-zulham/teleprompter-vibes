@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Teleprompter Vibes</string>
+    <string name="home_title">Teleprompter</string>
+    <string name="home_placeholder">Tulis naskah di sini…</string>
+    <string name="home_start">Start Prompter</string>
+    <string name="home_permission_needed">Izin overlay dibutuhkan untuk menampilkan naskah di atas kamera.</string>
+    <string name="home_grant_permission">Buka Pengaturan Izin</string>
+    <string name="overlay_notif_channel">Teleprompter Overlay</string>
+    <string name="overlay_notif_title">Teleprompter aktif</string>
+    <string name="overlay_notif_stop">Stop</string>
+    <string name="overlay_pause">Pause</string>
+    <string name="overlay_resume">Resume</string>
+</resources>
