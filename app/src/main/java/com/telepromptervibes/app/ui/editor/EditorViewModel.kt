@@ -15,7 +15,25 @@ data class EditorUiState(
     val isLoading: Boolean = true,
     val hasChanges: Boolean = false,
     val showDiscardDialog: Boolean = false,
-)
+) {
+    /** Jumlah kata dari content. Whitespace berlebih diabaikan. */
+    val wordCount: Int
+        get() = content.trim()
+            .split(Regex("\\s+"))
+            .count { it.isNotBlank() }
+
+    /** Estimasi durasi baca dalam menit (dibulatkan ke atas). 0 jika kosong. */
+    val estimatedMinutes: Int
+        get() {
+            val wc = wordCount
+            if (wc == 0) return 0
+            return (wc + WORDS_PER_MINUTE - 1) / WORDS_PER_MINUTE
+        }
+
+    companion object {
+        const val WORDS_PER_MINUTE = 130
+    }
+}
 
 sealed interface EditorEvent {
     data object NavigateBack : EditorEvent
