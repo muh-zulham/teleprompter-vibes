@@ -11,4 +11,36 @@
     <string name="overlay_notif_stop">Stop</string>
     <string name="overlay_pause">Pause</string>
     <string name="overlay_resume">Resume</string>
+
+    <!-- Home: empty state, FAB, overflow menu, delete confirm -->
+    <string name="home_empty_title">Belum ada naskah</string>
+    <string name="home_empty_subtitle">Tekan tombol + untuk membuat naskah pertama.</string>
+    <string name="home_fab_new">Naskah baru</string>
+    <string name="home_item_menu">Menu naskah</string>
+    <string name="home_menu_delete">Hapus</string>
+    <string name="home_delete_confirm_title">Hapus naskah?</string>
+    <string name="home_delete_confirm_message">Naskah \"%1$s\" akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.</string>
+    <string name="home_delete_confirm_yes">Hapus</string>
+    <string name="home_delete_confirm_no">Batal</string>
+
+    <!-- Editor: create/edit, back confirmation -->
+    <string name="editor_title_placeholder">Judul naskah</string>
+    <string name="editor_content_placeholder">Tulis naskah di sini…</string>
+    <string name="editor_save">Simpan</string>
+    <string name="editor_back">Kembali</string>
+    <string name="editor_discard_title">Buang perubahan?</string>
+    <string name="editor_discard_message">Perubahan yang belum disimpan akan hilang.</string>
+    <string name="editor_discard_yes">Buang</string>
+    <string name="editor_discard_no">Batal</string>
+
+    <!-- Umum -->
+    <string name="untitled">Untitled</string>
+
+    <!-- Waktu relatif -->
+    <string name="time_just_now">Baru saja</string>
+    <string name="time_minutes_ago">%1$d menit lalu</string>
+    <string name="time_hours_ago">%1$d jam lalu</string>
+    <string name="time_yesterday">Kemarin</string>
+    <string name="time_days_ago">%1$d hari lalu</string>
+
 </resources>

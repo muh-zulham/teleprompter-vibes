@@ -1,0 +1,122 @@
+package com.telepromptervibes.app.ui.editor
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.telepromptervibes.app.domain.repository.ScriptRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+data class EditorUiState(
+    val title: String = "",
+    val content: String = "",
+    val isLoading: Boolean = true,
+    val hasChanges: Boolean = false,
+    val showDiscardDialog: Boolean = false,
+)
+
+sealed interface EditorEvent {
+    data object NavigateBack : EditorEvent
+}
+
+class EditorViewModel(
+    private val repository: ScriptRepository,
+    private val scriptId: String?,
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(EditorUiState())
+    val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
+
+    private val _events = MutableStateFlow<EditorEvent?>(null)
+    val events: StateFlow<EditorEvent?> = _events.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            if (scriptId == null) {
+                // Create mode
+                _uiState.value = EditorUiState(isLoading = false)
+            } else {
+                // Edit mode: load existing. If not found (defensive), emit NavigateBack.
+                val existing = repository.getById(scriptId)
+                if (existing == null) {
+                    _events.value = EditorEvent.NavigateBack
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                } else {
+                    _uiState.value = EditorUiState(
+                        title = existing.title,
+                        content = existing.content,
+                        isLoading = false,
+                        hasChanges = false,
+                    )
+                }
+            }
+        }
+    }
+
+    fun onTitleChange(value: String) {
+        _uiState.value = _uiState.value.copy(title = value, hasChanges = true)
+    }
+
+    fun onContentChange(value: String) {
+        _uiState.value = _uiState.value.copy(content = value, hasChanges = true)
+    }
+
+    fun onSave() {
+        val state = _uiState.value
+        if (state.title.isBlank() && state.content.isBlank()) return
+
+        viewModelScope.launch {
+            if (scriptId == null) {
+                // Create
+                repository.createNew(state.title, state.content)
+            } else {
+                // Edit: preserve createdAt
+                val existing = repository.getById(scriptId)
+                if (existing != null) {
+                    repository.upsert(
+                        existing.copy(
+                            title = state.title.trim().ifEmpty { "Untitled" },
+                            content = state.content,
+                            updatedAt = System.currentTimeMillis(),
+                            // createdAt TIDAK diubah — tetap dari existing
+                        )
+                    )
+                }
+            }
+            _events.value = EditorEvent.NavigateBack
+        }
+    }
+
+    fun onBackPressed() {
+        if (_uiState.value.hasChanges) {
+            _uiState.value = _uiState.value.copy(showDiscardDialog = true)
+        } else {
+            _events.value = EditorEvent.NavigateBack
+        }
+    }
+
+    fun onDiscardConfirmed() {
+        _uiState.value = _uiState.value.copy(showDiscardDialog = false)
+        _events.value = EditorEvent.NavigateBack
+    }
+
+    fun onDiscardDismissed() {
+        _uiState.value = _uiState.value.copy(showDiscardDialog = false)
+    }
+
+    fun consumeEvent() {
+        _events.value = null
+    }
+
+    companion object {
+        fun factory(repository: ScriptRepository, scriptId: String?): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    return EditorViewModel(repository, scriptId) as T
+                }
+            }
+    }
+}
