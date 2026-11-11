@@ -8,13 +8,16 @@ import com.telepromptervibes.app.domain.repository.ScriptRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
     val scripts: List<Script> = emptyList(),
     val isLoading: Boolean = true,
     val scriptToDelete: Script? = null,
+    val searchQuery: String = "",
 )
 
 sealed interface HomeEvent {
@@ -25,20 +28,39 @@ class HomeViewModel(
     private val repository: ScriptRepository,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private val searchQuery = MutableStateFlow("")
+    private val scriptToDelete = MutableStateFlow<Script?>(null)
+
+    val uiState: StateFlow<HomeUiState> = combine(
+        repository.observeAll(),
+        searchQuery,
+        scriptToDelete
+    ) { scripts, query, toDelete ->
+        val filtered = if (query.isBlank()) {
+            scripts
+        } else {
+            scripts.filter {
+                it.title.contains(query, ignoreCase = true) ||
+                it.content.contains(query, ignoreCase = true)
+            }
+        }
+        HomeUiState(
+            scripts = filtered,
+            isLoading = false,
+            scriptToDelete = toDelete,
+            searchQuery = query
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = HomeUiState()
+    )
 
     private val _events = MutableStateFlow<HomeEvent?>(null)
     val events: StateFlow<HomeEvent?> = _events.asStateFlow()
 
-    init {
-        viewModelScope.launch {
-            repository.observeAll()
-                .map { list -> HomeUiState(scripts = list, isLoading = false) }
-                .collect { newState ->
-                    _uiState.value = newState
-                }
-        }
+    fun onSearchQueryChange(query: String) {
+        searchQuery.value = query
     }
 
     fun onAddClicked() {
@@ -50,19 +72,19 @@ class HomeViewModel(
     }
 
     fun onDeleteRequested(script: Script) {
-        _uiState.value = _uiState.value.copy(scriptToDelete = script)
+        scriptToDelete.value = script
     }
 
     fun onDeleteConfirmed() {
-        val script = _uiState.value.scriptToDelete ?: return
+        val script = scriptToDelete.value ?: return
         viewModelScope.launch {
             repository.delete(script.id)
-            _uiState.value = _uiState.value.copy(scriptToDelete = null)
+            scriptToDelete.value = null
         }
     }
 
     fun onDeleteDismissed() {
-        _uiState.value = _uiState.value.copy(scriptToDelete = null)
+        scriptToDelete.value = null
     }
 
     fun consumeEvent() {

@@ -43,4 +43,10 @@
     <string name="time_yesterday">Kemarin</string>
     <string name="time_days_ago">%1$d hari lalu</string>
 
+
+    <!-- Home UI Modernization -->
+    <string name="home_screen_title">My Scripts</string>
+    <string name="home_screen_subtitle">Your personal workspace</string>
+    <string name="home_search_placeholder">Search scripts...</string>
+    <string name="home_search_clear">Clear search</string>
 </resources>

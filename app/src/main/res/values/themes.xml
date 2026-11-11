@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Teleprompter" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Gunakan base Dark NoActionBar untuk mencegah flash putih saat start -->
+    <style name="Theme.Teleprompter" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#101114</item>
+        <item name="android:statusBarColor">#101114</item>
+        <item name="android:navigationBarColor">#101114</item>
+    </style>
 </resources>
