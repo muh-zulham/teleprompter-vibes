@@ -1,11 +1,18 @@
 package com.telepromptervibes.app.ui.navigation
 
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.ResultReceiver
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.telepromptervibes.app.overlay.OverlayController
+import com.telepromptervibes.app.overlay.OverlayService
 import com.telepromptervibes.app.ui.editor.EditorScreen
 import com.telepromptervibes.app.ui.home.HomeScreen
 import com.telepromptervibes.app.ui.prompter.PrompterScreen
@@ -70,9 +77,38 @@ fun AppNavHost() {
         ) { backStackEntry ->
             val scriptId = backStackEntry.arguments?.getString(Routes.EDITOR_ARG)
             if (scriptId != null) {
+                val context = LocalContext.current
                 PrompterScreen(
                     scriptId = scriptId,
                     onExit = { navController.popBackStack() },
+                    onStartOverlay = { script, speed, progress, onResult ->
+                        var alreadySent = false
+                        val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
+                            override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+                                if (alreadySent) return
+                                alreadySent = true
+                                when (resultCode) {
+                                    OverlayService.RESULT_OVERLAY_STARTED -> onResult(true)
+                                    OverlayService.RESULT_OVERLAY_FAILED -> onResult(false)
+                                    else -> onResult(false)
+                                }
+                            }
+                        }
+                        try {
+                            OverlayController.start(
+                                context = context,
+                                script = script,
+                                speedDpPerSec = speed,
+                                initialProgress = progress,
+                                resultReceiver = receiver,
+                            )
+                        } catch (e: Exception) {
+                            if (!alreadySent) {
+                                alreadySent = true
+                                onResult(false)
+                            }
+                        }
+                    },
                 )
             }
         }

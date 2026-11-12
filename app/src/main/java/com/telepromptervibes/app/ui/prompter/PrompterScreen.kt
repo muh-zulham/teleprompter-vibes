@@ -23,7 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -33,9 +35,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -54,21 +58,25 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.telepromptervibes.app.R
 import com.telepromptervibes.app.TeleprompterApp
+import com.telepromptervibes.app.overlay.OverlayService
+import com.telepromptervibes.app.permission.OverlayPermission
 import com.telepromptervibes.app.scrolling.ScrollEngine
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 private const val AUTO_HIDE_MS = 2000L
 
-// Layout constants (approved)
 private const val TOP_SPACER_FRACTION = 0.65f
 private const val BOTTOM_SPACER_FRACTION = 0.60f
 private const val GUIDE_POSITION_FRACTION = 0.425f
@@ -79,6 +87,7 @@ private const val GUIDE_ALPHA = 0.40f
 fun PrompterScreen(
     scriptId: String,
     onExit: () -> Unit = {},
+    onStartOverlay: (String, Float, Float, (Boolean) -> Unit) -> Unit = { _, _, _, _ -> },
     vm: PrompterViewModel = viewModel(
         factory = PrompterViewModel.factory(
             (LocalContext.current.applicationContext as TeleprompterApp).container.scriptRepository,
@@ -87,9 +96,15 @@ fun PrompterScreen(
     ),
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    var pendingStartAfterPermission by remember { mutableStateOf(false) }
+    var showOverlayError by remember { mutableStateOf(false) }
+    var isStartingOverlay by remember { mutableStateOf(false) }
 
     // Pause otomatis saat rotasi (Composable di-recreate)
-    // LaunchedEffect(Unit) berjalan sekali setiap kali Composable masuk ke composition baru.
     LaunchedEffect(Unit) {
         if (vm.uiState.value.isPlaying) {
             vm.onPlayPauseToggle()
@@ -98,6 +113,29 @@ fun PrompterScreen(
 
     LaunchedEffect(state.isNotFound) {
         if (state.isNotFound) onExit()
+    }
+
+    // Recheck permission saat activity resume
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && pendingStartAfterPermission) {
+                pendingStartAfterPermission = false
+                if (OverlayPermission.canDrawOverlays(context)) {
+                    startOverlay(
+                        state = state,
+                        onStartOverlay = onStartOverlay,
+                        onExit = onExit,
+                        onError = {
+                            showOverlayError = true
+                            isStartingOverlay = false
+                        },
+                        onFinished = { isStartingOverlay = false },
+                    )
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     BackHandler(enabled = true) {
@@ -116,6 +154,32 @@ fun PrompterScreen(
                 navigationIcon = {
                     IconButton(onClick = onExit) {
                         Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.prompter_exit))
+                    }
+                },
+                actions = {
+                    IconButton(
+                        enabled = !isStartingOverlay,
+                        onClick = {
+                        if (!OverlayPermission.canDrawOverlays(context)) {
+                            pendingStartAfterPermission = true
+                            showPermissionDialog = true
+                        } else {
+                            startOverlay(
+                        state = state,
+                        onStartOverlay = onStartOverlay,
+                        onExit = onExit,
+                        onError = {
+                            showOverlayError = true
+                            isStartingOverlay = false
+                        },
+                        onFinished = { isStartingOverlay = false },
+                    )
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Filled.PictureInPictureAlt,
+                            contentDescription = stringResource(R.string.prompter_overlay_button),
+                        )
                     }
                 },
             )
@@ -149,6 +213,71 @@ fun PrompterScreen(
             }
         }
     }
+
+    // Permission dialog
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showPermissionDialog = false
+                pendingStartAfterPermission = false
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text(stringResource(R.string.prompter_overlay_title), color = MaterialTheme.colorScheme.onSurface) },
+            text = { Text(stringResource(R.string.prompter_overlay_message), color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPermissionDialog = false
+                    OverlayPermission.openSettings(context)
+                }) {
+                    Text(stringResource(R.string.prompter_overlay_grant), color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showPermissionDialog = false
+                    pendingStartAfterPermission = false
+                }) {
+                    Text(stringResource(R.string.prompter_overlay_cancel), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+        )
+    }
+
+    // Overlay error dialog
+    if (showOverlayError) {
+        AlertDialog(
+            onDismissRequest = { showOverlayError = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text(stringResource(R.string.prompter_overlay_error_title), color = MaterialTheme.colorScheme.onSurface) },
+            text = { Text(stringResource(R.string.prompter_overlay_error_message), color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            confirmButton = {
+                TextButton(onClick = { showOverlayError = false }) {
+                    Text(stringResource(R.string.prompter_overlay_ok), color = MaterialTheme.colorScheme.primary)
+                }
+            },
+        )
+    }
+}
+
+private fun startOverlay(
+    state: PrompterUiState,
+    onStartOverlay: (String, Float, Float, (Boolean) -> Unit) -> Unit,
+    onExit: () -> Unit,
+    onError: () -> Unit,
+    onFinished: () -> Unit,
+) {
+    val script = state.script ?: return
+    val safeProgress = if (state.progress.isFinite()) state.progress.coerceIn(0f, 1f) else 0f
+
+    var resultHandled = false
+    val onResult: (Boolean) -> Unit = { success ->
+        if (!resultHandled) {
+            resultHandled = true
+            onFinished()
+            if (success) onExit() else onError()
+        }
+    }
+    onStartOverlay(script.content, state.speedDpPerSec, safeProgress, onResult)
 }
 
 @Composable
@@ -166,57 +295,43 @@ private fun PrompterContent(
     var controlsVisible by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isUserDragging by remember { mutableStateOf(false) }
-    
+    var hasRestoredInitialProgress by remember { mutableStateOf(false) }
+
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val speedPxPerSec = with(density) { speedDpPerSec.dp.toPx() }
 
-    // Engine stabil
     val engine = remember {
         ScrollEngine(speedPxPerSec = speedPxPerSec, initialMaxOffsetPx = 0f)
     }
 
-    // Sync speed
     LaunchedEffect(speedPxPerSec) {
         engine.speedPxPerSec = speedPxPerSec
     }
 
-    // Sync maxValue (resize)
-    // Sinkronisasi maxValue dan restore posisi.
-    // Menggunakan snapshotFlow agar hanya terpicu saat maxValue BERUBAH,
-    // bukan setiap frame.
-    LaunchedEffect(Unit) {
-        snapshotFlow { scrollState.maxValue }
-            .collect { maxVal ->
-                if (maxVal > 0) {
-                    engine.maxOffsetPx = maxVal.toFloat()
-                    // Pulihkan posisi hanya jika engine masih di awal (0f)
-                    // dan ada savedOffsetPx dari rotasi sebelumnya.
-                    if (engine.currentOffsetPx == 0f && savedOffsetPx > 0f) {
-                        engine.syncTo(savedOffsetPx)
-                    }
-                    // Sinkronkan Compose ScrollState dengan engine (hanya sekali saat maxValue berubah)
-                    val synced = engine.currentOffsetPx.roundToInt()
-                    if (scrollState.value != synced) {
-                        scrollState.scrollTo(synced)
-                    }
-                }
+    LaunchedEffect(scrollState.maxValue) {
+        if (scrollState.maxValue > 0) {
+            engine.maxOffsetPx = scrollState.maxValue.toFloat()
+            if (!hasRestoredInitialProgress && savedOffsetPx > 0f) {
+                val target = savedOffsetPx.roundToInt().coerceIn(0, scrollState.maxValue)
+                engine.syncTo(target.toFloat())
+                scrollState.scrollTo(target)
+                hasRestoredInitialProgress = true
             }
+        }
     }
 
-    // NestedScrollConnection: deteksi user drag
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (source == NestedScrollSource.Drag) {
                     isUserDragging = true
                 }
-                return Offset.Zero  // jangan konsumsi delta
+                return Offset.Zero
             }
         }
     }
 
-    // Deteksi drag selesai (finger lift / fling selesai)
     LaunchedEffect(Unit) {
         snapshotFlow { scrollState.isScrollInProgress }
             .collect { inProgress ->
@@ -228,7 +343,6 @@ private fun PrompterContent(
             }
     }
 
-    // Frame loop
     LaunchedEffect(isPlaying, isUserDragging, engine) {
         if (isUserDragging) return@LaunchedEffect
         if (!isPlaying) return@LaunchedEffect
@@ -251,7 +365,6 @@ private fun PrompterContent(
                     onProgressChanged(engine.currentOffsetPx / engine.maxOffsetPx)
                 }
             } else if (targetOffset >= 0) {
-                // Tetap update progress dan offset meski posisi sama (misal di akhir)
                 onScrollOffsetChanged(engine.currentOffsetPx)
                 if (engine.maxOffsetPx > 0f) {
                     onProgressChanged(engine.currentOffsetPx / engine.maxOffsetPx)
@@ -260,7 +373,6 @@ private fun PrompterContent(
         }
     }
 
-    // Auto-hide controls
     LaunchedEffect(lastInteraction, controlsVisible) {
         if (!controlsVisible) return@LaunchedEffect
         delay(AUTO_HIDE_MS)
@@ -282,7 +394,6 @@ private fun PrompterContent(
     ) {
         val usableHeight = maxHeight
 
-        // Scrollable content (dengan spacer atas & bawah)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -300,7 +411,6 @@ private fun PrompterContent(
             Spacer(Modifier.height(usableHeight * BOTTOM_SPACER_FRACTION))
         }
 
-        // Reading guide (fixed, tidak ikut scroll)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -316,7 +426,6 @@ private fun PrompterContent(
             )
         }
 
-        // Controls
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),

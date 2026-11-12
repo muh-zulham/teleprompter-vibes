@@ -60,4 +60,20 @@
     <string name="prompter_exit">Keluar</string>
     <string name="prompter_speed">Kecepatan</string>
     <string name="prompter_progress">Progres: %1$d%%</string>
+
+    <!-- Prompter: Overlay entry -->
+    <string name="prompter_overlay_title">Tampilkan di atas kamera</string>
+    <string name="prompter_overlay_message">Aplikasi membutuhkan izin menampilkan di atas aplikasi lain agar naskah tetap terlihat saat merekam dengan kamera.</string>
+    <string name="prompter_overlay_grant">Buka Pengaturan</string>
+    <string name="prompter_overlay_cancel">Batal</string>
+    <string name="prompter_overlay_button">Overlay</string>
+
+    <!-- Overlay controls -->
+    <string name="overlay_exit">Keluar overlay</string>
+    <string name="overlay_drag_handle">Geser overlay</string>
+
+    <!-- Prompter: Overlay error -->
+    <string name="prompter_overlay_error_title">Gagal menampilkan overlay</string>
+    <string name="prompter_overlay_error_message">Periksa izin overlay atau coba lagi.</string>
+    <string name="prompter_overlay_ok">OK</string>
 </resources>
