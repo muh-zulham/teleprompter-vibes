@@ -1,43 +1,45 @@
 package com.telepromptervibes.app.scrolling
 
 /**
- * Pure scroll engine: menghitung offset berdasarkan waktu yang berlalu,
- * bukan jumlah karakter. Lihat handover §7.
- *
- * Semua satuan dalam dp. Tidak ada Android import — mudah di-unit-test.
+ * Pure scroll engine. Unit: Pixels, Seconds.
+ * Tidak ada Android import. Mudah di-unit-test.
  */
 class ScrollEngine(
-    private val speedDpPerSec: Float,
-    private val contentHeightDp: Float,
-    private val viewportHeightDp: Float,
+    speedPxPerSec: Float,
+    initialMaxOffsetPx: Float,
 ) {
-    private var accumulatedMs: Long = 0L
-
-    /** Offset saat ini dalam dp, dibatasi [0, maxOffsetDp]. */
-    val offsetDp: Float
-        get() {
-            val raw = (speedDpPerSec * (accumulatedMs / 1000f))
-            return raw.coerceIn(0f, maxOffsetDp)
+    var speedPxPerSec: Float = if (speedPxPerSec.isFinite()) speedPxPerSec.coerceAtLeast(0f) else 0f
+        set(value) {
+            field = if (value.isFinite()) value.coerceAtLeast(0f) else 0f
         }
 
-    val maxOffsetDp: Float
-        get() = (contentHeightDp - viewportHeightDp).coerceAtLeast(0f)
+    var maxOffsetPx: Float = if (initialMaxOffsetPx.isFinite()) initialMaxOffsetPx.coerceAtLeast(0f) else 0f
+        set(value) {
+            val safeMax = if (value.isFinite()) value.coerceAtLeast(0f) else 0f
+            field = safeMax
+            currentOffsetPx = currentOffsetPx.coerceIn(0f, safeMax)
+        }
+
+    var currentOffsetPx: Float = 0f
+        private set
 
     val isFinished: Boolean
-        get() = offsetDp >= maxOffsetDp && maxOffsetDp > 0f
+        get() = maxOffsetPx > 0f && currentOffsetPx >= maxOffsetPx
 
-    /** Majukan waktu. Dipanggil dari frame loop saat state = playing. */
-    fun advance(deltaMs: Long) {
-        if (deltaMs > 0) accumulatedMs += deltaMs
+    /** Majukan waktu. deltaSeconds dalam detik (bukan ms). */
+    fun advance(deltaSeconds: Float) {
+        if (!deltaSeconds.isFinite() || deltaSeconds <= 0f) return
+        if (isFinished) return
+        
+        val deltaPx = speedPxPerSec * deltaSeconds
+        if (!deltaPx.isFinite() || deltaPx <= 0f) return
+
+        currentOffsetPx = (currentOffsetPx + deltaPx).coerceIn(0f, maxOffsetPx)
     }
 
-    /** Pause = berhenti menambah waktu. Posisi otomatis terjaga. */
-    fun pause() { /* no-op: advance() tidak dipanggil */ }
-
-    /** Resume = lanjut menambah waktu dari accumulatedMs yang sama. */
-    fun resume() { /* no-op: advance() dipanggil lagi */ }
-
-    fun reset() {
-        accumulatedMs = 0L
+    /** Sinkronisasi posisi dari ScrollState (saat manual drag). */
+    fun syncTo(offsetPx: Float) {
+        val safe = if (offsetPx.isFinite()) offsetPx else 0f
+        currentOffsetPx = safe.coerceIn(0f, maxOffsetPx)
     }
 }

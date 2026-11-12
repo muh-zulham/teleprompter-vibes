@@ -8,12 +8,15 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.telepromptervibes.app.ui.editor.EditorScreen
 import com.telepromptervibes.app.ui.home.HomeScreen
+import com.telepromptervibes.app.ui.prompter.PrompterScreen
 
 private object Routes {
     const val HOME = "home"
     const val EDITOR = "editor"
     const val EDITOR_ARG = "scriptId"
     const val EDITOR_ROUTE = "$EDITOR?$EDITOR_ARG={$EDITOR_ARG}"
+    const val PROMPTER = "prompter"
+    const val PROMPTER_ROUTE = "$PROMPTER?$EDITOR_ARG={$EDITOR_ARG}"
 }
 
 @Composable
@@ -50,7 +53,28 @@ fun AppNavHost() {
             EditorScreen(
                 scriptId = scriptId,
                 onNavigateBack = { navController.popBackStack() },
+                onStartPrompter = { savedId ->
+                    navController.navigate("${Routes.PROMPTER}?${Routes.EDITOR_ARG}=$savedId")
+                },
             )
+        }
+
+        composable(
+            route = Routes.PROMPTER_ROUTE,
+            arguments = listOf(
+                navArgument(Routes.EDITOR_ARG) {
+                    type = NavType.StringType
+                    nullable = false
+                }
+            ),
+        ) { backStackEntry ->
+            val scriptId = backStackEntry.arguments?.getString(Routes.EDITOR_ARG)
+            if (scriptId != null) {
+                PrompterScreen(
+                    scriptId = scriptId,
+                    onExit = { navController.popBackStack() },
+                )
+            }
         }
     }
 }

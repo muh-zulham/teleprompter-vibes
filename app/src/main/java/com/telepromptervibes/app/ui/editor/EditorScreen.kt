@@ -45,6 +45,7 @@ import com.telepromptervibes.app.TeleprompterApp
 fun EditorScreen(
     scriptId: String?,
     onNavigateBack: () -> Unit = {},
+    onStartPrompter: (String) -> Unit = {},
     vm: EditorViewModel = viewModel(
         factory = EditorViewModel.factory(
             (LocalContext.current.applicationContext as TeleprompterApp).container.scriptRepository,
@@ -160,10 +161,10 @@ fun EditorScreen(
                 )
             }
 
-            // Start Prompter: placeholder disabled (Prompter Mode belum ada)
+            // Start Prompter: auto-save lalu navigate ke Prompter Mode
             Button(
-                onClick = { /* Placeholder — Prompter Mode di Langkah 3 */ },
-                enabled = false,
+                onClick = { vm.onSaveThen(onSuccess = onStartPrompter) },
+                enabled = state.wordCount > 0 && !state.isSaving,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -180,12 +181,6 @@ fun EditorScreen(
                     fontWeight = FontWeight.SemiBold,
                 )
             }
-            Text(
-                text = stringResource(R.string.editor_start_prompter_coming_soon),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 

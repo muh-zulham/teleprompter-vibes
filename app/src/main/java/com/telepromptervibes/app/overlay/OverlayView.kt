@@ -35,11 +35,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.telepromptervibes.app.scrolling.ScrollEngine
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 private const val AUTO_HIDE_MS = 2000L
 private const val SPEED_DP_PER_SEC = 40f
@@ -53,27 +55,28 @@ fun OverlayContent(
     var controlsVisible by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val scrollState = rememberScrollState()
+    val density = LocalDensity.current
 
-    // Engine dibuat ulang HANYA saat maxValue berubah (layout berubah).
-    val engine = remember(scrollState.maxValue) {
-        ScrollEngine(
-            speedDpPerSec = SPEED_DP_PER_SEC,
-            contentHeightDp = scrollState.maxValue.toFloat(),
-            viewportHeightDp = 0f,
-        )
+    val speedPxPerSec = with(density) { SPEED_DP_PER_SEC.dp.toPx() }
+
+    val engine = remember {
+        ScrollEngine(speedPxPerSec = speedPxPerSec, initialMaxOffsetPx = 0f)
     }
 
-    // Frame loop: jalan hanya saat playing dan ada konten untuk di-scroll.
+    LaunchedEffect(scrollState.maxValue) {
+        engine.maxOffsetPx = scrollState.maxValue.toFloat()
+    }
+
     LaunchedEffect(playing, engine) {
-        if (scrollState.maxValue == 0) return@LaunchedEffect
+        if (!playing) return@LaunchedEffect
         var lastNanos = 0L
         while (playing) {
             var targetOffset = -1
             withFrameNanos { now ->
                 if (lastNanos != 0L) {
-                    val deltaMs = (now - lastNanos) / 1_000_000L
-                    engine.advance(deltaMs)
-                    targetOffset = engine.offsetDp.toInt()
+                    val deltaSeconds = (now - lastNanos) / 1_000_000_000f
+                    engine.advance(deltaSeconds)
+                    targetOffset = engine.currentOffsetPx.roundToInt()
                 }
                 lastNanos = now
             }
@@ -83,7 +86,6 @@ fun OverlayContent(
         }
     }
 
-    // Auto-hide kontrol setelah 2 detik tanpa interaksi.
     LaunchedEffect(lastInteraction, controlsVisible) {
         if (!controlsVisible) return@LaunchedEffect
         delay(AUTO_HIDE_MS)

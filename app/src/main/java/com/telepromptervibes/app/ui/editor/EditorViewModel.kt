@@ -15,6 +15,7 @@ data class EditorUiState(
     val isLoading: Boolean = true,
     val hasChanges: Boolean = false,
     val showDiscardDialog: Boolean = false,
+    val isSaving: Boolean = false,
 ) {
     /** Jumlah kata dari content. Whitespace berlebih diabaikan. */
     val wordCount: Int
@@ -104,6 +105,53 @@ class EditorViewModel(
                 }
             }
             _events.value = EditorEvent.NavigateBack
+        }
+    }
+
+    /**
+     * Save lalu panggil onSuccess(scriptId) tanpa emit NavigateBack.
+     * Digunakan untuk alur "Mulai Prompter" (auto-save sebelum navigate).
+     *
+     * Owner constraints:
+     * - onSuccess hanya dipanggil setelah save BERHASIL.
+     * - Edit mode dengan existing == null: tidak navigate, tidak buat duplikat.
+     * - Exception ditangkap, tidak crash, user tetap di Editor.
+     */
+    fun onSaveThen(onSuccess: (String) -> Unit) {
+        val state = _uiState.value
+        if (state.title.isBlank() && state.content.isBlank()) return
+        if (state.isSaving) return
+
+        _uiState.value = _uiState.value.copy(isSaving = true)
+        viewModelScope.launch {
+            try {
+                val savedId: String = if (scriptId == null) {
+                    // Create mode: createNew mengembalikan Script dengan ID baru
+                    val created = repository.createNew(state.title, state.content)
+                    created.id
+                } else {
+                    // Edit mode: preserve createdAt, no duplicate
+                    val existing = repository.getById(scriptId)
+                    if (existing == null) {
+                        // Defensive: script hilang di DB. Jangan navigate.
+                        return@launch
+                    }
+                    repository.upsert(
+                        existing.copy(
+                            title = state.title.trim().ifEmpty { "Untitled" },
+                            content = state.content,
+                            updatedAt = System.currentTimeMillis(),
+                        )
+                    )
+                    scriptId
+                }
+                _uiState.value = _uiState.value.copy(isSaving = false)
+                onSuccess(savedId)
+            } catch (e: Exception) {
+                // TODO(ui-error): tampilkan error UI proper. Untuk sekarang: log + tetap di Editor.
+                android.util.Log.e("EditorViewModel", "onSaveThen failed", e)
+                _uiState.value = _uiState.value.copy(isSaving = false)
+            }
         }
     }
 

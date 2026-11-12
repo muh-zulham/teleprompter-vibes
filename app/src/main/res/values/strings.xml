@@ -52,6 +52,12 @@
 
     <!-- Editor: UI Modernization Step 2 -->
     <string name="editor_start_prompter">Mulai Prompter</string>
-    <string name="editor_start_prompter_coming_soon">Mode Prompter segera hadir</string>
     <string name="editor_stats">%1$d kata · ~%2$d mnt baca</string>
+
+    <!-- Prompter Mode -->
+    <string name="prompter_play">Mainkan</string>
+    <string name="prompter_pause">Jeda</string>
+    <string name="prompter_exit">Keluar</string>
+    <string name="prompter_speed">Kecepatan</string>
+    <string name="prompter_progress">Progres: %1$d%%</string>
 </resources>
